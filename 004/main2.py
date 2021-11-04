@@ -78,7 +78,7 @@ def save():
     video_manager = ti.VideoManager(output_dir=result_dir, framerate=24, automatic_build=False)
 
     step = 0.0
-    for i in range(1000):
+    for i in range(100):
         paint(step)
         step += 0.01
         video_manager.write_frame(pixels.to_numpy())
