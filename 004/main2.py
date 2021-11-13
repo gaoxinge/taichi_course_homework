@@ -5,13 +5,24 @@ ti.init(ti.gpu)
 res = 512
 
 # flat layout
-# pixels = ti.field(ti.f32, (res, res))
+pixels = ti.field(ti.f32, (res, res))
+
+# flat layout
+# pixels = ti.field(ti.f32)
+# block = ti.root.dense(ti.ij, (512, 512))
+# block.place(pixels)
 
 # hierarchical layout
-pixels = ti.field(ti.f32)
-block = ti.root.dense(ti.ij, (2, 2))
-block = block.dense(ti.ij, (256, 256))
-block.place(pixels)
+# pixels = ti.field(ti.f32)
+# block = ti.root.dense(ti.ij, (2, 2))
+# block = block.dense(ti.ij, (256, 256))
+# block.place(pixels)
+
+# hierarchical layout
+# pixels = ti.field(ti.f32)
+# block = ti.root.dense(ti.ij, (256, 256))
+# block = block.dense(ti.ij, (2, 2))
+# block.place(pixels)
 
 
 @ti.func
@@ -92,4 +103,5 @@ def save():
 
 
 if __name__ == "__main__":
-    save()
+    show()
+    # save()
