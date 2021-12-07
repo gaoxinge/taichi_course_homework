@@ -20,7 +20,7 @@ t_max = 300  # max temperature (in Celsius)
 t_min = 0  # min temperature
 heat_center = (n // 2, n // 2)
 heat_radius = 5.1
-k = 50.0  # rate of heat diffusion
+k = 100.0  # rate of heat diffusion
 
 # temperature now and temperature next_time
 t_n = ti.field(ti.f32, shape=(n, n))
@@ -41,13 +41,6 @@ def init():
 
 
 @ti.kernel
-def update_source():
-    for i, j in t_n:
-        if (float(i) - heat_center[0]) ** 2 + (float(j) - heat_center[1]) ** 2 <= heat_radius ** 2:
-            t_np1[i, j] = t_max
-
-
-@ti.kernel
 def diffuse(dt: ti.f32):
     c = dt * k / dx ** 2
     for i, j in t_n:
@@ -62,42 +55,54 @@ def diffuse(dt: ti.f32):
             t_np1[i, j] += c * (t_n[i, j + 1] - t_n[i, j])
 
 
-def update_source_and_commit():
-    update_source()
-    t_n.copy_from(t_np1)
+@ti.kernel
+def update_source():
+    for i, j in t_n:
+        if (float(i) - heat_center[0]) ** 2 + (float(j) - heat_center[1]) ** 2 <= heat_radius ** 2:
+            t_np1[i, j] = t_max
 
 
 @ti.func
-def get_color(v, vmin, vmax):
+def restrict(v):
+    if v < t_min:
+        v = t_min
+    if v > t_max:
+        v = t_max
+    return v
+
+
+@ti.kernel
+def commit():
+    for i, j in t_n:
+        t_n[i, j] = restrict(t_np1[i, j])
+
+
+@ti.func
+def get_color(v):
     c = ti.Vector([1.0, 1.0, 1.0])  # white
+    dv = t_max - t_min
 
-    if v < vmin:
-        v = vmin
-    if v > vmax:
-        v = vmax
-    dv = vmax - vmin
-
-    if v < (vmin + 0.25 * dv):
+    if v < (t_min + 0.25 * dv):
         c[0] = 0
-        c[1] = 4 * (v - vmin) / dv
-    elif v < (vmin + 0.5 * dv):
+        c[1] = 4 * (v - t_min) / dv
+    elif v < (t_min + 0.5 * dv):
         c[0] = 0
-        c[2] = 1 + 4 * (vmin + 0.25 * dv - v) / dv
-    elif v < (vmin + 0.75 * dv):
-        c[0] = 4 * (v - vmin - 0.5 * dv) / dv
+        c[2] = 1 + 4 * (t_min + 0.25 * dv - v) / dv
+    elif v < (t_min + 0.75 * dv):
+        c[0] = 4 * (v - t_min - 0.5 * dv) / dv
         c[2] = 0
     else:
-        c[1] = 1 + 4 * (vmin + 0.75 * dv - v) / dv
+        c[1] = 1 + 4 * (t_min + 0.75 * dv - v) / dv
         c[2] = 0
 
     return c
 
 
 @ti.kernel
-def temperature_to_color(t: ti.template(), color: ti.template(), tmin: ti.f32, tmax: ti.f32):
-    for i, j in t:
+def temperature_to_color():
+    for i, j in t_n:
         for k, l in ti.ndrange(scatter, scatter):
-            color[i * scatter + k, j * scatter + l] = get_color(t[i, j], tmin, tmax)
+            pixels[i * scatter + k, j * scatter + l] = get_color(t_n[i, j])
 
 
 # GUI
@@ -120,9 +125,10 @@ while my_gui.running:
     if not paused:
         for sub in range(substep):
             diffuse(h / substep)
-            update_source_and_commit()
+            update_source()
+            commit()
 
-    temperature_to_color(t_np1, pixels, t_min, t_max)
+    temperature_to_color()
     my_gui.set_image(pixels)
     if save_images and not paused:
         my_gui.show(f"images/output_{i:05}.png")
